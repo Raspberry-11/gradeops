@@ -1,100 +1,113 @@
 # GradeOps 🎓
 
-GradeOps is an automated system designed to process, transcribe, and grade scanned student exams at scale. It combines a robust backend architecture for OCR and automated evaluation with a sleek frontend dashboard for instructors and teaching assistants to review, override, and distribute grades.
+Welcome to **GradeOps**—a comprehensive, automated platform built to streamline the processing, transcription, and grading of scanned examination papers at scale. 
 
-## 🚀 Features
-
-- **Automated Grading**: Uses advanced language models to automatically evaluate student answers against instructor-provided rubrics.
-- **Intelligent OCR Pipeline**: Extracts text from scanned handwritten or digital PDF exams. Supports robust ML backends like **Qwen-VL** and **Meta Nougat**, as well as lightweight Dev/Mock and PyMuPDF pipelines for local testing.
-- **Interactive Review Dashboard**: An intuitive UI to review student grades on a question-by-question basis. TAs can visually verify the OCR results and add manual overrides or justifications.
-- **Grades Management**: Filter graded exams, view student progression, and export data directly to CSV.
-- **Plagiarism Detection**: Submissions are automatically checked against each other for high semantic similarity.
-- **Extensible Storage**: Can run fully locally (JSON + local file system) or seamlessly scale to AWS (S3 for PDFs/images + DynamoDB for semi-structured grade records).
-
-## 🛠 Tech Stack
-
-**Backend (`/scripts`)**
-- Python 3.10+
-- [FastAPI](https://fastapi.tiangolo.com/) & Uvicorn (REST API)
-- [LangChain](https://python.langchain.com/) (LLM pipeline)
-- PyMuPDF / HuggingFace Transformers (Handling PDFs and OCR)
-- scikit-learn (Plagiarism / vector math)
-
-**Frontend (`/client`)**
-- React 18
-- [Vite](https://vitejs.dev/) (Build tool)
-- [Tailwind CSS v4](https://tailwindcss.com/) (Styling)
-- React Router (Routing)
+By unifying a powerful Optical Character Recognition (OCR) and Large Language Model (LLM) backend with a modern, user-friendly frontend interface, GradeOps empowers educators and teaching assistants to seamlessly review submissions, adjust grades, and distribute results.
 
 ---
 
-## 💻 Local Development Setup
+## 🌟 Key Capabilities
 
-Follow these steps to get the GradeOps stack running locally.
+- **Intelligent OCR Engine**  
+  Effortlessly extracts handwritten and digital text from PDF submissions. Features support for lightweight local processing (PyMuPDF, Dev/Mock) as well as heavy-duty ML models like **Qwen-VL** and **Meta Nougat**.
+- **AI-Driven Evaluation**  
+  Leverages state-of-the-art language models to accurately assess student responses based on custom, instructor-defined rubrics.
+- **Intuitive Instructor Dashboard**  
+  Provides a unified interface for TAs and instructors to visually inspect OCR outputs side-by-side with student grades. Allows for manual overrides and detailed justifications on a per-question basis.
+- **Automated Plagiarism Detection**  
+  Proactively flags highly similar semantic structures across batch submissions to maintain academic integrity.
+- **Comprehensive Grade Management**  
+  Filter records, track student performance trends, and export finalized grades directly to CSV for Learning Management System (LMS) integration.
+- **Flexible Infrastructure**  
+  Engineered to run either entirely locally (utilizing local file storage and JSON) or on the cloud via AWS (integrating S3 for media and DynamoDB for records).
 
-### 1. Start the Backend
+---
 
-1. Navigate to the backend directory:
+## 🛠️ Technology Stack
+
+### Backend (`/scripts`)
+- **Core:** Python 3.10+, FastAPI, Uvicorn
+- **AI & NLP:** LangChain, HuggingFace Transformers, scikit-learn
+- **Document Processing:** PyMuPDF
+
+### Frontend (`/client`)
+- **Framework:** React 18
+- **Build & Routing:** Vite, React Router
+- **Design:** Tailwind CSS v4
+
+---
+
+## 🚀 Getting Started (Local Environment)
+
+Follow these instructions to deploy the GradeOps stack on your local machine.
+
+### 1. Initialize the Backend Services
+
+1. Move into the backend directory:
    ```bash
    cd scripts
    ```
-2. Create and activate a Python virtual environment:
+2. Set up a virtual environment and activate it:
    ```bash
    python -m venv .venv
-   # Windows:
-   .\.venv\Scripts\Activate.ps1
-   # MacOS/Linux:
+   
+   # For MacOS/Linux:
    source .venv/bin/activate
+   # For Windows:
+   .\.venv\Scripts\Activate.ps1
    ```
-3. Install the Python dependencies:
+3. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-4. Set up your environment variables:
-   - Copy the example environment file:
+4. Configure your environment:
+   - Duplicate the example environment file:
      ```bash
      cp .env.example .env
      ```
-   - Make sure your `.env` is configured for local running:
+   - Ensure your `.env` contains the local settings:
      ```properties
      OCR_BACKEND=mock
      LLM_PROVIDER=mock
      STORAGE_BACKEND=local
      ```
-   *(Note: The `mock` OCR backend will fallback to extracting embedded digital text from the PDFs if available, otherwise utilizing dummy data.)*
-5. Start the FastAPI server:
+   *(Note: The `mock` setting will fall back to extracting digital text from PDFs if available, otherwise it generates synthetic data.)*
+5. Launch the backend API:
    ```bash
    uvicorn main:app --reload --port 8000
    ```
 
-### 2. Start the Frontend
+### 2. Launch the Frontend Interface
 
-1. Open a new terminal and navigate to the client directory:
+1. In a separate terminal window, navigate to the client directory:
    ```bash
    cd client
    ```
-2. Install the necessary packages:
+2. Install Node.js dependencies:
    ```bash
    npm install
    ```
-3. Run the Vite development server:
+3. Start the development server:
    ```bash
    npm run dev
    ```
-4. Open your browser and go to `http://localhost:5173`.
+4. Access the dashboard by visiting `http://localhost:5173` in your web browser.
 
 ---
 
-## 🎯 Usage Workflow
+## 📖 Operational Workflow
 
-1. **Upload Exam**: Use the Upload page on the frontend to supply basic exam details, instructor criteria/rubrics (in JSON format), and multiple student PDF submissions.
-2. **Background Processing**: The backend schedules background tasks to extract pages, crop questions, run the OCR engine, and generate grading results. It also checks for plagiarism against other exams in the same batch.
-3. **Review**: Head to the **Review Dashboard** to see recent exam batches. Click an exam to view the graded questions by student. Here you can accept the generated grade or manually override it and provide notes.
-4. **Grades Overview**: The **Grades** page allows you to view all completed assessments, check for plagiarism flags, and download the grades in CSV format for importing into your LMS.
+1. **Submission Phase:** Navigate to the **Upload** page to input exam metadata, upload instructor rubrics (JSON format), and attach the student PDF submissions.
+2. **Automated Processing:** The backend asynchronously segments documents, runs the OCR engine, evaluates responses, and cross-checks for plagiarism within the batch.
+3. **Review & Moderation:** Open the **Review Dashboard** to inspect the processed exams. You can seamlessly approve the AI's grading or intervene with manual corrections and feedback.
+4. **Finalization & Export:** Visit the **Grades** view to monitor overall completion, investigate plagiarism alerts, and download the final CSV report for your LMS.
 
-## ⚙️ Configuration Options
+---
 
-GradeOps is highly configurable via `.env`:
-- `LLM_PROVIDER`: Switch between `openai`, `anthropic`, `together`, or `mock`.
-- `OCR_BACKEND`: Switch from `mock` to `qwen_vl` or `nougat` for real handwriting extraction (requires a strong GPU).
-- `STORAGE_BACKEND`: Switch to `s3` and configure your DynamoDB + S3 credentials for remote scalable storage.
+## ⚙️ Advanced Configuration
+
+GradeOps behavior can be customized by modifying your `.env` file:
+
+- `LLM_PROVIDER`: Choose your preferred intelligence layer (`openai`, `anthropic`, `together`, or `mock`).
+- `OCR_BACKEND`: Upgrade from `mock` to `qwen_vl` or `nougat` for production-grade handwriting recognition (GPU recommended).
+- `STORAGE_BACKEND`: Transition to `s3` to scale your storage using AWS S3 and DynamoDB.
