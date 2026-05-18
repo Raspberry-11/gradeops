@@ -1,0 +1,12 @@
+[
+  {
+    "student_id": "student_01",
+    "exam_id": "b9c83f88-ec72-4724-93fb-b77f35e805d2",
+    "question_number": 1,
+    "raw_text": "DBMS\nQUIZ-II\nMM - 10\n\n1. A collection of related data is called a Database\n2. SQL stands for Similar.Query Language\n3. In a relational database, rows are also called Tuples.\n4. The command used to remove all records from a table but keep the table\nstructure is Join.\n5. A Primary key uniquely identifies each record in a table.\n6. The SQL clause used to filter records is WHERE.\n7. Normalization helps reduce Similarity in a database.\n8. A foreign key is used to maintain referential integrity.\n9. The result of a SQL query is stored in a view.\n10. The command used to add a new column to an existing table is\nALTER.",
+    "confidence": 0.92,
+    "image_crop_path": "./crops\\b9c83f88-ec72-4724-93fb-b77f35e805d2_student_01_q1_aceb2e.png",
+    "page_number": 1,
+    "processed_at": "2026-05-18T13:35:02.067438Z"
+  }
+]
