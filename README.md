@@ -77,6 +77,7 @@ Follow these instructions to deploy the GradeOps stack on your local machine.
    uvicorn main:app --reload --port 8000
    ```
 
+
 ### 2. Launch the Frontend Interface
 
 1. In a separate terminal window, navigate to the client directory:
