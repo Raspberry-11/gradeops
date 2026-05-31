@@ -1,4 +1,4 @@
-<![CDATA[# ⚡ GradeOps — AI-Powered Exam Grading Pipeline
+# ⚡ GradeOps — AI-Powered Exam Grading Pipeline
 
 > **Human-in-the-Loop (HITL)** grading system that processes scanned handwritten exams at scale using AI, then lets Teaching Assistants rapidly review and finalize grades.
 
@@ -229,11 +229,13 @@ Copy the corresponding `.env.example` file to get started.
 ## 🎯 Usage Workflow
 
 ### 1. Instructor — Upload Exam
+
 - Log in as Instructor → Navigate to **Upload Exam**
 - Upload a question paper PDF → AI auto-generates a rubric (or paste/edit your own JSON rubric)
 - Upload student answer PDFs → Submit for grading
 
 ### 2. AI Pipeline (runs automatically in background)
+
 - Crops individual questions from each student PDF using PyMuPDF
 - Runs OCR on each cropped answer image (Groq or Gemini Vision)
 - Evaluates each answer against the rubric criteria using an LLM
@@ -241,6 +243,7 @@ Copy the corresponding `.env.example` file to get started.
 - Scans all answers for plagiarism via TF-IDF cosine similarity
 
 ### 3. TA — Review Grades
+
 - Log in as TA → Open **Review Dashboard**
 - View AI-proposed grades side-by-side with the original handwritten answer crop
 - Press `A` to approve or `O` to override with a custom score & justification
@@ -248,12 +251,14 @@ Copy the corresponding `.env.example` file to get started.
 - Bulk approve remaining grades with one click
 
 ### 4. Student — View Results
+
 - Log in as Student → View **Student Dashboard**
 - See all graded exams with total scores
 - Drill into individual exam results to see per-question grades, AI feedback, and answer crops
 - Submit regrade requests with explanatory notes
 
 ### 5. Instructor — Export
+
 - View the **Exams List** with stats
 - Download finalized grades as CSV for LMS integration
 
@@ -385,14 +390,3 @@ gradeops/
 Please follow [Conventional Commits](https://www.conventionalcommits.org/) for commit messages.
 
 ---
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
-<p align="center">
-  Built with ❤️ using FastAPI, React, and AI
-</p>
-]]>
