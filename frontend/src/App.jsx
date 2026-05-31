@@ -8,12 +8,16 @@ import UploadExam from './pages/instructor/UploadExam';
 import ExamsList from './pages/instructor/ExamsList';
 import ReviewDashboard from './pages/ta/ReviewDashboard';
 import PlagiarismView from './pages/ta/PlagiarismView';
+import StudentDashboard from './pages/student/StudentDashboard';
+import StudentExamView from './pages/student/StudentExamView';
 
 function RootRedirect() {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === 'instructor' ? '/instructor/exams' : '/ta/review'} replace />;
+  if (user.role === 'instructor') return <Navigate to="/instructor/exams" replace />;
+  if (user.role === 'student') return <Navigate to="/student/dashboard" replace />;
+  return <Navigate to="/ta/review" replace />;
 }
 
 export default function App() {
@@ -46,6 +50,18 @@ export default function App() {
           <Route path="/ta/plagiarism" element={
             <ProtectedRoute role="ta">
               <Layout><PlagiarismView /></Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Student */}
+          <Route path="/student/dashboard" element={
+            <ProtectedRoute role="student">
+              <Layout><StudentDashboard /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/student/exams/:examId" element={
+            <ProtectedRoute role="student">
+              <Layout><StudentExamView /></Layout>
             </ProtectedRoute>
           } />
 

@@ -28,7 +28,7 @@ from models import OCRResult
 
 logger = logging.getLogger(__name__)
 
-BackendType = Literal["qwen_vl", "nougat", "gemini", "mock"]
+BackendType = Literal["qwen_vl", "nougat", "gemini", "mock", "groq"]
 
 
 # ─────────────────────────────────────────────
@@ -50,6 +50,11 @@ class OCRConfig:
     )
     # Configurable Gemini model — change to "gemini-1.5-pro" for better accuracy
     gemini_ocr_model: str = "gemini-2.0-flash"
+
+    groq_api_key: str = field(
+        default_factory=lambda: os.environ.get("GROQ_API_KEY", "")
+    )
+    groq_ocr_model: str = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 
 # ─────────────────────────────────────────────
@@ -200,6 +205,67 @@ class _GeminiBackend:
         return text, confidence
 
 
+class _GroqBackend:
+    """
+    Wraps Groq Vision API for handwriting transcription.
+    Uses meta-llama/llama-4-scout-17b-16e-instruct.
+    """
+
+    _RATE_LIMIT_SLEEP_SECONDS = 0.4
+
+    def __init__(self, api_key: str, model: str = "meta-llama/llama-4-scout-17b-16e-instruct"):
+        if not api_key:
+            raise ValueError(
+                "Groq API key is required for the groq OCR backend. "
+                "Set GROQ_API_KEY in your .env file."
+            )
+        import groq
+        self.client = groq.Groq(api_key=api_key)
+        self.model = model
+        logger.info("Groq Vision backend initialized (%s).", model)
+
+    def transcribe(self, image: Image.Image) -> tuple[str, float]:
+        import io
+        import base64
+        import time
+
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        base64_image = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        prompt = (
+            "This is a scanned handwritten student exam answer sheet. "
+            "Transcribe exactly what is handwritten, word for word. "
+            "Include all answers you can see. "
+            "Output only the transcribed text, nothing else."
+        )
+
+        chat_completion = self.client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}",
+                            },
+                        },
+                    ],
+                }
+            ],
+            model=self.model,
+        )
+        text = chat_completion.choices[0].message.content.strip()
+
+        word_count = len(text.split())
+        confidence = round(min(0.92, 0.70 + word_count * 0.005), 3)
+
+        time.sleep(self._RATE_LIMIT_SLEEP_SECONDS)
+        return text, confidence
+
+
 class _MockBackend:
     """Deterministic mock — safe to use without GPU or API key."""
 
@@ -304,6 +370,8 @@ class OCRPipeline:
             return _NougatBackend(self.cfg.nougat_model_id, self.cfg.device)
         elif b == "gemini":
             return _GeminiBackend(self.cfg.gemini_api_key, self.cfg.gemini_ocr_model)
+        elif b == "groq":
+            return _GroqBackend(self.cfg.groq_api_key, self.cfg.groq_ocr_model)
         elif b == "mock":
             return _MockBackend()
         raise ValueError(f"Unknown OCR backend: {b!r}")

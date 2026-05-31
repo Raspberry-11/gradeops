@@ -207,6 +207,7 @@ class GradeOpsPipeline:
                 "reviewed_by":        payload.ta_id,
                 "ta_override_score":  payload.override_score,
                 "ta_override_note":   payload.override_note or "",
+                "total_awarded":      payload.override_score,  # Overwrite the actual grade!
             }
         else:
             raise ValueError(f"Unknown action: {payload.action}")
@@ -218,6 +219,17 @@ class GradeOpsPipeline:
         grades = self.storage.load_grades(exam_id)
         return next((g for g in grades if g.grade_id == payload.grade_id), None)
 
+    def submit_regrade_request(self, grade_id: str, note: str, exam_id: str) -> GradeResult | None:
+        updates = {
+            "status": GradeStatus.PENDING_REGRADE.value,
+            "regrade_request_note": note,
+        }
+        self.storage.update_grade(grade_id, updates, exam_id=exam_id)
+        logger.info("Student submitted regrade request | grade=%s", grade_id)
+
+        grades = self.storage.load_grades(exam_id)
+        return next((g for g in grades if g.grade_id == grade_id), None)
+
     # ── convenience queries ───────────────────
 
     def get_dashboard_data(self, exam_id: str) -> dict[str, Any]:
@@ -226,7 +238,7 @@ class GradeOpsPipeline:
         ocr_map = {(o.student_id, o.question_number): o for o in ocr}
 
         pending = [g for g in grades if g.status in
-                   (GradeStatus.AI_GRADED, GradeStatus.FLAGGED)]
+                   (GradeStatus.AI_GRADED, GradeStatus.FLAGGED, GradeStatus.PENDING_REGRADE)]
 
         dashboard = {
             "exam_id":      exam_id,

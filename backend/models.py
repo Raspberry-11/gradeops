@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 class UserRole(str, Enum):
     INSTRUCTOR = "instructor"
     TA = "ta"
+    STUDENT = "student"
 
 class GradeStatus(str, Enum):
     PENDING   = "pending"    # OCR done, not yet graded
@@ -24,6 +25,7 @@ class GradeStatus(str, Enum):
     APPROVED  = "approved"   # TA approved AI grade
     OVERRIDDEN = "overridden" # TA overrode AI grade
     FLAGGED   = "flagged"    # Flagged for plagiarism or review
+    PENDING_REGRADE = "pending_regrade" # Student requested a regrade
 
 
 # ─────────────────────────────────────────────
@@ -92,6 +94,7 @@ class GradeResult(BaseModel):
     reviewed_by: str | None = None     # TA user_id if reviewed
     ta_override_score: float | None = None
     ta_override_note: str | None = None
+    regrade_request_note: str | None = None
 
 
 # ─────────────────────────────────────────────

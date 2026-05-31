@@ -60,6 +60,19 @@ export const api = {
     return request('/exams', { method: 'POST', body: formData });
   },
 
+  /* ── Auto-Generate Rubric ──────────────── */
+  extractAnswerKeyText(formData) {
+    return request('/rubrics/extract-text', { method: 'POST', body: formData });
+  },
+
+  generateRubric(extractedText) {
+    return request('/rubrics/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extracted_text: extractedText }),
+    });
+  },
+
   /* ── Exam listing ──────────────────────── */
   listExams() {
     return request('/exams');
@@ -112,6 +125,23 @@ export const api = {
   /* ── Health ───────────────────────────── */
   health() {
     return request('/health');
+  },
+
+  /* ── Student ──────────────────────────── */
+  getStudentExams() {
+    return request('/student/exams');
+  },
+
+  getStudentExamDetail(examId) {
+    return request(`/student/exams/${examId}`);
+  },
+
+  submitRegrade(gradeId, payload) {
+    return request(`/student/grades/${gradeId}/regrade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
   },
 };
 

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 import csv
 import io
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from auth import require_instructor, require_ta_or_above
 from database import UserORM
@@ -75,18 +75,46 @@ def get_pipeline() -> GradeOpsPipeline:
 # ─────────────────────────────────────────────
 
 def _parse_rubrics(rubrics_json: str, exam_id: str) -> list[Rubric]:
-    raw_list = _json.loads(rubrics_json)
-    rubrics: list[Rubric] = []
-    for raw in raw_list:
-        raw = dict(raw)
-        criteria_data = raw.pop("criteria", [])
-        rubrics.append(Rubric(
-            rubric_id=str(uuid.uuid4()),
-            exam_id=exam_id,
-            criteria=[RubricCriterion(**c) for c in criteria_data],
-            **raw,
-        ))
-    return rubrics
+    try:
+        raw_data = _json.loads(rubrics_json)
+        
+        if isinstance(raw_data, dict) and "questions" in raw_data:
+            raw_list = raw_data["questions"]
+        elif isinstance(raw_data, dict):
+            raw_list = [raw_data]
+        elif isinstance(raw_data, list):
+            raw_list = raw_data
+        else:
+            raise HTTPException(status_code=422, detail="Rubrics JSON must be a list or a dictionary")
+            
+        rubrics: list[Rubric] = []
+        for raw in raw_list:
+            raw = dict(raw)
+            
+            # Map flat text "rubric" to a single criterion if "criteria" list isn't provided
+            if "rubric" in raw and isinstance(raw["rubric"], str) and "criteria" not in raw:
+                criteria_data = [{
+                    "criterion_id": f"c1_q{raw.get('question_number', '0')}",
+                    "description": raw.pop("rubric"),
+                    "max_points": raw.get("total_points", 0),
+                    "partial_credit": True
+                }]
+            else:
+                criteria_data = raw.pop("criteria", [])
+                
+            rubrics.append(Rubric(
+                rubric_id=str(uuid.uuid4()),
+                exam_id=exam_id,
+                criteria=[RubricCriterion(**c) for c in criteria_data],
+                **raw,
+            ))
+        return rubrics
+    except ValidationError as e:
+        # Simplify the error message for the frontend
+        err_msgs = [f"{err['loc'][-1]}: {err['msg']}" for err in e.errors()]
+        raise HTTPException(status_code=422, detail=f"Rubric missing fields: {', '.join(err_msgs)}")
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON format: {str(e)}")
 
 
 # ─────────────────────────────────────────────
@@ -96,6 +124,9 @@ def _parse_rubrics(rubrics_json: str, exam_id: str) -> list[Rubric]:
 class BulkApprovePayload(BaseModel):
     grade_ids: list[str]
     ta_id: str
+
+class RubricGeneratePayload(BaseModel):
+    extracted_text: str
 
 
 # ─────────────────────────────────────────────
@@ -127,6 +158,94 @@ async def list_exams(
         batches = list(seen.values())
     return {"exams": batches}
 
+
+# ── POST /rubrics/extract-text ──────────────────
+@router.post("/rubrics/extract-text", summary="[Instructor] Extract text from Answer Key PDF (digital or scanned)")
+async def extract_answer_key_text(
+    pdf: UploadFile = File(...),
+    pipeline: GradeOpsPipeline = Depends(get_pipeline),
+    current_user: UserORM = Depends(require_instructor),
+):
+    import fitz
+    tmp_dir = tempfile.mkdtemp(prefix="gradeops_key_")
+    try:
+        dest = os.path.join(tmp_dir, pdf.filename or f"{uuid.uuid4()}.pdf")
+        content = await pdf.read()
+        with open(dest, "wb") as fh:
+            fh.write(content)
+
+        # 1. Try digital text extraction first
+        doc = fitz.open(dest)
+        extracted_text = chr(12).join([page.get_text() for page in doc]).strip()
+        doc.close()
+
+        # 2. If no text found, it's likely scanned. Fallback to Vision OCR.
+        if len(extracted_text) < 50:
+            logger.info("No digital text found in Answer Key. Falling back to Vision OCR.")
+            pages = pipeline.ocr._pdf_to_images(dest)
+            ocr_texts = []
+            for img in pages:
+                # Transcribe each page using the configured OCR backend
+                text, _ = pipeline.ocr._backend.transcribe(img)
+                ocr_texts.append(text)
+            extracted_text = "\n\n".join(ocr_texts)
+        
+        return {"extracted_text": extracted_text}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ── POST /rubrics/generate ────────────────────
+@router.post("/rubrics/generate", summary="[Instructor] Generate Rubric JSON from extracted text")
+async def generate_rubric(
+    payload: RubricGeneratePayload,
+    pipeline: GradeOpsPipeline = Depends(get_pipeline),
+    current_user: UserORM = Depends(require_instructor),
+):
+    from langchain_core.messages import SystemMessage, HumanMessage
+    
+    prompt = f"""You are an expert professor. Below is the text extracted from an Answer Key or Exam Document.
+Extract the grading rubric.
+Return a STRICT JSON array of Rubric objects matching this exact structure:
+[
+  {{
+    "question_number": 1,
+    "question": "The question text (if present)",
+    "total_points": 10,
+    "strict_mode": false,
+    "criteria": [
+      {{
+        "criterion_id": "c1_q1",
+        "description": "Description of what is required",
+        "max_points": 5,
+        "required_keywords": ["keyword1", "keyword2"],
+        "partial_credit": true
+      }}
+    ]
+  }}
+]
+Make sure to break down total points into logical criteria. Return ONLY valid JSON, no markdown fences.
+
+ANSWER KEY TEXT:
+{payload.extracted_text}"""
+    
+    try:
+        response = pipeline.grader.llm.invoke([
+            SystemMessage(content="You generate strict JSON rubrics."),
+            HumanMessage(content=prompt)
+        ])
+        content = response.content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+        
+        # Validate that it is parseable JSON
+        _json.loads(content)
+        return {"rubrics_json": content}
+    except Exception as e:
+        logger.error("Failed to generate rubric: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to generate rubric: {str(e)}")
 
 # ── POST /exams  ──────────────────────────────
 @router.post("/exams", summary="[Instructor] Submit exam PDFs + rubric for grading")
@@ -205,9 +324,84 @@ async def get_dashboard(
 ):
     try:
         return pipeline.get_dashboard_data(exam_id)
-    except Exception as exc:
-        logger.exception("Dashboard error | exam_id=%s", exam_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception as e:
+        logger.exception("Failed to export grades CSV")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ─────────────────────────────────────────────
+# Student Routes
+# ─────────────────────────────────────────────
+
+from auth import require_student
+
+class RegradeRequestPayload(BaseModel):
+    exam_id: str
+    note: str
+
+@router.get("/student/exams", summary="[Student] List my exams")
+async def get_student_exams(
+    pipeline:     GradeOpsPipeline = Depends(get_pipeline),
+    current_user: UserORM = Depends(require_student),
+):
+    """Return a list of exams this student has grades for."""
+    student_prefix = current_user.email.split("@")[0]
+    batches = pipeline.storage.list_batches()
+    
+    my_exams = []
+    for b in batches:
+        exam_id = b["exam_id"]
+        grades = pipeline.storage.load_grades(exam_id=exam_id, student_id=student_prefix)
+        if grades:
+            total_awarded = sum(g.total_awarded for g in grades)
+            total_possible = sum(g.total_possible for g in grades)
+            my_exams.append({
+                "exam_id": exam_id,
+                "course_id": b["course_id"],
+                "total_awarded": total_awarded,
+                "total_possible": total_possible,
+            })
+    return my_exams
+
+@router.get("/student/exams/{exam_id}", summary="[Student] Get detailed grades for an exam")
+async def get_student_exam_detail(
+    exam_id: str,
+    pipeline:     GradeOpsPipeline = Depends(get_pipeline),
+    current_user: UserORM = Depends(require_student),
+):
+    student_prefix = current_user.email.split("@")[0]
+    grades = pipeline.storage.load_grades(exam_id=exam_id, student_id=student_prefix)
+    if not grades:
+        raise HTTPException(status_code=404, detail="No grades found for this exam")
+
+    ocr = pipeline.storage.load_ocr(exam_id=exam_id, student_id=student_prefix)
+    ocr_map = {o.question_number: o for o in ocr}
+
+    items = []
+    for g in grades:
+        items.append({
+            "grade": g.model_dump(),
+            "crop_path": "/crops/" + os.path.basename(ocr_map[g.question_number].image_crop_path) if g.question_number in ocr_map and ocr_map[g.question_number].image_crop_path else None,
+        })
+
+    return items
+
+@router.post("/student/grades/{grade_id}/regrade", summary="[Student] Submit regrade request")
+async def submit_regrade(
+    grade_id: str,
+    payload: RegradeRequestPayload,
+    pipeline:     GradeOpsPipeline = Depends(get_pipeline),
+    current_user: UserORM = Depends(require_student),
+):
+    student_prefix = current_user.email.split("@")[0]
+    grades = pipeline.storage.load_grades(exam_id=payload.exam_id, student_id=student_prefix)
+    
+    # Ensure this grade actually belongs to the student
+    target_grade = next((g for g in grades if g.grade_id == grade_id), None)
+    if not target_grade:
+        raise HTTPException(status_code=404, detail="Grade not found or doesn't belong to you")
+        
+    updated = pipeline.submit_regrade_request(grade_id, payload.note, payload.exam_id)
+    return {"status": "ok", "updated_grade": updated.model_dump() if updated else None}
 
 
 # ── GET /exams/{exam_id}/grades  ──────────────

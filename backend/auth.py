@@ -155,6 +155,18 @@ async def require_ta_or_above(
     return current_user
 
 
+async def require_student(
+    current_user: Annotated[UserORM, Depends(get_current_user)],
+) -> UserORM:
+    """Dependency: only Students may proceed."""
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Student role required",
+        )
+    return current_user
+
+
 # ─────────────────────────────────────────────
 # Auth routes
 # ─────────────────────────────────────────────

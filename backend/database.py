@@ -121,6 +121,7 @@ async def _seed_demo_users() -> None:
     demos = [
         ("instructor@gradeops.dev", "instructor123", "Dr. Demo Instructor", UserRole.INSTRUCTOR),
         ("ta@gradeops.dev",         "ta123",          "TA Demo",             UserRole.TA),
+        ("student@gradeops.dev",    "student123",     "Student Demo",        UserRole.STUDENT),
     ]
 
     async with AsyncSessionLocal() as session:

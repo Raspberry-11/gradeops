@@ -15,7 +15,10 @@ export default function ProtectedRoute({ children, role }) {
 
   if (!user) return <Navigate to="/login" replace />;
   if (role && user.role !== role) {
-    return <Navigate to={user.role === 'instructor' ? '/instructor/exams' : '/ta/review'} replace />;
+    let target = '/ta/review';
+    if (user.role === 'instructor') target = '/instructor/exams';
+    if (user.role === 'student') target = '/student/dashboard';
+    return <Navigate to={target} replace />;
   }
 
   return children;

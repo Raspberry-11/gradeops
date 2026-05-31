@@ -1,16 +1,18 @@
-# Dependencies
+# ─── Dependencies ────────────────────────────
 node_modules/
 .venv/
 venv/
 env/
+.pnp
+.pnp.js
 
-# Build outputs
-/client/dist
-/client/build
+# ─── Build Outputs ───────────────────────────
 dist/
 build/
+*.egg-info/
+*.egg
 
-# Python
+# ─── Python ──────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -18,23 +20,37 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+*.pyo
+*.pyd
 
-# Environment variables
+# ─── Environment Variables (secrets!) ────────
 .env
 .env.local
 .env.development
 .env.test
 .env.production
-.env.example
 
-# IDE and OS
+# ─── IDE and OS ──────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 
-# Logs
+# ─── Logs ────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 *.log
+
+# ─── Docker ──────────────────────────────────
+# Ignore local docker data volumes but not config
+docker-compose.override.yml
+
+# ─── Generated Data (runtime) ────────────────
+backend/gradeops_data/
+backend/crops/
+crops/
+gradeops_data/

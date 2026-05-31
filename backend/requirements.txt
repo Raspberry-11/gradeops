@@ -21,8 +21,8 @@ Pillow                        # image handling
 # Google Gemini Vision API — used for OCR (no GPU required)
 google-generativeai>=0.8
 
-# Uncomment ONLY if switching to GPU-based OCR backends (qwen_vl / nougat):
 # torch>=2.0
+# torchvision>=0.15
 # transformers>=4.40
 # accelerate
 
@@ -36,6 +36,7 @@ langchain-google-genai>=1.0   # Gemini via LangChain (used by grading_agent.py)
 # langchain-openai             # for OpenAI GPT models
 # langchain-anthropic          # for Anthropic Claude models
 # langchain-together           # for Together AI
+langchain-groq               # for Groq
 
 # ── Plagiarism ────────────────────────────────
 scikit-learn
