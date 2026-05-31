@@ -31,11 +31,12 @@
 
 GradeOps automates the most time-consuming parts of exam grading:
 
-1. **Upload** scanned PDF answer sheets and a grading rubric.
+1. **Upload** scanned PDF answer sheets and a grading rubric (or let AI auto-generate one).
 2. **AI Pipeline** crops individual questions, runs OCR to transcribe handwriting, and evaluates answers against the rubric using LLMs.
-3. **Plagiarism Detection** flags semantically similar answers across students.
+3. **Plagiarism Detection** flags semantically similar answers across students using TF-IDF cosine similarity.
 4. **Human Review** — TAs use a keyboard-driven dashboard to approve or override AI-proposed grades in seconds.
-5. **Export** finalized grades as CSV for LMS integration.
+5. **Student Portal** — Students can view their graded exams, scores, feedback, and submit regrade requests.
+6. **Export** finalized grades as CSV for LMS integration.
 
 ---
 
@@ -44,39 +45,61 @@ GradeOps automates the most time-consuming parts of exam grading:
 | Feature | Description |
 |---------|-------------|
 | 🤖 **AI Grading Pipeline** | OCR via Groq/Gemini Vision → LLM rubric evaluation via Groq/Gemini → structured JSON output |
-| 📝 **Smart Rubric Generation** | Upload a question paper PDF and let the AI auto-generate a grading rubric |
-| 👩‍🏫 **Instructor Portal** | Drag-and-drop exam uploads, rubric editor, stats dashboard, CSV export |
+| 📝 **Smart Rubric Generation** | Upload a question paper PDF and let the AI auto-generate a structured JSON grading rubric |
+| 👩‍🏫 **Instructor Portal** | Drag-and-drop exam uploads, rubric editor, stats dashboard, one-click CSV grade export |
 | 👨‍💻 **TA Review Dashboard** | Split-screen dark-mode UI with keyboard shortcuts (`A` approve, `O` override, `↑↓` navigate) |
-| 🎓 **Student Portal** | Students can view their graded exams, scores, and AI-generated feedback |
-| 🔍 **Plagiarism Detection** | Cosine similarity on TF-IDF vectors with configurable thresholds; visual similarity bars |
-| 🔐 **Role-Based Access** | JWT authentication with Instructor, TA, and Student roles |
-| 🐳 **One-Command Deploy** | Full stack runs via `docker compose up` |
+| 🎓 **Student Portal** | Students view graded exams with scores, AI feedback, and can submit regrade requests |
+| 🔍 **Plagiarism Detection** | TF-IDF cosine similarity with configurable thresholds; visual similarity bars (Red >90%, Amber >75%) |
+| 🔐 **Role-Based Access (RBAC)** | JWT authentication with three roles: Instructor, TA, and Student |
+| 📦 **One-Command Deploy** | Full stack (PostgreSQL + FastAPI + React) runs via `docker compose up` |
 
 ---
 
 ## 🏗 Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend (React + Vite)              │
-│  Login │ Instructor Portal │ TA Dashboard │ Student Portal  │
-└────────────────────────────┬────────────────────────────────┘
-                             │ REST API (JSON)
-┌────────────────────────────▼────────────────────────────────┐
-│                    Backend (FastAPI + Uvicorn)               │
-│                                                             │
-│  Auth (JWT/RBAC)  ─────  API Routes  ─────  Background Jobs │
-│                              │                              │
-│         ┌────────────────────▼──────────────────────┐       │
-│         │           GradeOps Pipeline               │       │
-│         │  1. PDF → Crop Questions (PyMuPDF)        │       │
-│         │  2. Crop → OCR Text (Groq / Gemini)       │       │
-│         │  3. Text → Grade + Justification (LLM)    │       │
-│         │  4. Plagiarism Scan (TF-IDF + Cosine Sim) │       │
-│         └───────────────────────────────────────────┘       │
-│                              │                              │
-│              Storage (Local FS / S3)    PostgreSQL (Async)   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                       Frontend (React 18 + Vite)                     │
+│                                                                      │
+│  ┌──────────┐  ┌──────────────┐  ┌────────────┐  ┌───────────────┐  │
+│  │  Login /  │  │  Instructor  │  │     TA     │  │    Student    │  │
+│  │ Register │  │    Portal    │  │  Dashboard │  │    Portal     │  │
+│  └──────────┘  └──────────────┘  └────────────┘  └───────────────┘  │
+└────────────────────────┬─────────────────────────────────────────────┘
+                         │ REST API (JSON + JWT)
+┌────────────────────────▼─────────────────────────────────────────────┐
+│                    Backend (FastAPI + Uvicorn)                        │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │                    Auth Layer (JWT + RBAC)                      │ │
+│  │           Instructor  │  TA  │  Student role enforcement       │ │
+│  └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌─────────────────┐ ┌──────────────────┐ ┌───────────────────────┐ │
+│  │  Instructor API  │ │     TA API       │ │    Student API        │ │
+│  │  • Upload Exams  │ │  • Review Grades │ │  • View Results       │ │
+│  │  • Rubric Gen    │ │  • Bulk Approve  │ │  • View Feedback      │ │
+│  │  • Export CSV    │ │  • Plagiarism    │ │  • Regrade Requests   │ │
+│  └────────┬────────┘ └────────┬─────────┘ └───────────┬───────────┘ │
+│           │                   │                       │              │
+│  ┌────────▼───────────────────▼───────────────────────▼───────────┐ │
+│  │                    GradeOps Pipeline                            │ │
+│  │  1. PDF → Crop Questions (PyMuPDF)                             │ │
+│  │  2. Crop → OCR Text (Groq / Gemini Vision)                    │ │
+│  │  3. Text → Grade + Justification (LLM)                        │ │
+│  │  4. Plagiarism Scan (TF-IDF + Cosine Similarity)              │ │
+│  └────────────────────────────┬───────────────────────────────────┘ │
+│                               │                                      │
+│  ┌────────────────────────────▼───────────────────────────────────┐ │
+│  │   Storage (Local FS / S3)          PostgreSQL (Async)          │ │
+│  │   • PDFs, Crops, Grades JSON       • Users, Auth, Sessions    │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │                  Background Job Queue (Thread-based)           │ │
+│  │          Async pipeline execution with status polling          │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -85,11 +108,12 @@ GradeOps automates the most time-consuming parts of exam grading:
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Python 3.12, FastAPI, SQLAlchemy (async), Uvicorn, Pydantic |
-| **Frontend** | React 18, Vite, Tailwind CSS v4, React Router |
+| **Backend** | Python 3.12, FastAPI, SQLAlchemy (async), Uvicorn, Pydantic v2 |
+| **Frontend** | React 18, Vite, Tailwind CSS v4, React Router v6 |
 | **Database** | PostgreSQL 16 (via Docker) |
-| **AI / ML** | Groq (Llama 3.3 70B), Google Gemini (Vision + Text), PyMuPDF, scikit-learn |
-| **Infrastructure** | Docker Compose, Nginx (production frontend) |
+| **AI / ML** | Groq (Llama 3.3 70B), Google Gemini (Vision + Text), LangChain, PyMuPDF, scikit-learn |
+| **Auth** | JWT (python-jose), bcrypt (passlib), OAuth2 Bearer |
+| **Infrastructure** | Docker Compose, Nginx (production frontend serving) |
 
 ---
 
@@ -99,7 +123,7 @@ GradeOps automates the most time-consuming parts of exam grading:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-username>/gradeops.git
+git clone https://github.com/Raspberry-11/gradeops
 cd gradeops
 
 # 2. Set up environment variables
@@ -118,12 +142,13 @@ Wait ~60 seconds for the build, then open:
 | **API Docs (Swagger)** | [http://localhost:8000/docs](http://localhost:8000/docs) |
 | **API Docs (ReDoc)** | [http://localhost:8000/redoc](http://localhost:8000/redoc) |
 
-### Demo Accounts (auto-seeded)
+### Demo Accounts (auto-seeded on first startup)
 
 | Role | Email | Password |
 |------|-------|----------|
 | Instructor | `instructor@gradeops.dev` | `instructor123` |
 | TA | `ta@gradeops.dev` | `ta123` |
+| Student | `student@gradeops.dev` | `student123` |
 
 ---
 
@@ -154,7 +179,7 @@ docker run -d \
   -e POSTGRES_DB=gradeops \
   -p 5432:5432 postgres:16-alpine
 
-# Run the server (tables & demo users are auto-created)
+# Run the server (tables & demo users are auto-created on first startup)
 uvicorn main:app --reload --port 8000
 ```
 
@@ -178,8 +203,10 @@ Open [http://localhost:5173](http://localhost:5173).
 
 GradeOps uses two levels of `.env` files:
 
-1. **Root `.env`** — read by `docker-compose.yml` to inject into containers.
+1. **Root `.env`** — read by `docker-compose.yml` to inject variables into containers.
 2. **`backend/.env`** — used when running the backend locally (outside Docker).
+
+Copy the corresponding `.env.example` file to get started.
 
 ### Key Variables
 
@@ -190,7 +217,7 @@ GradeOps uses two levels of `.env` files:
 | `LLM_MODEL` | `llama-3.3-70b-versatile` | Model name for the chosen provider |
 | `GROQ_API_KEY` | — | API key from [Groq Console](https://console.groq.com/keys) |
 | `GEMINI_API_KEY` | — | API key from [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `DATABASE_URL` | `postgresql+asyncpg://...` | Async PostgreSQL connection string |
+| `DATABASE_URL` | `postgresql+asyncpg://gradeops:gradeops@localhost:5432/gradeops` | Async PostgreSQL connection string |
 | `JWT_SECRET` | — | Random secret for signing JWT tokens |
 | `PLAGIARISM_THRESHOLD` | `0.85` | Cosine similarity threshold for plagiarism flagging |
 | `STORAGE_BACKEND` | `local` | `local` for filesystem, `s3` for AWS S3 |
@@ -201,75 +228,89 @@ GradeOps uses two levels of `.env` files:
 
 ## 🎯 Usage Workflow
 
-1. **Instructor — Upload Exam**
-   - Log in as instructor → Navigate to "Upload Exam"
-   - Upload a question paper PDF → AI auto-generates a rubric (or paste your own JSON rubric)
-   - Upload student answer PDFs → Submit for grading
+### 1. Instructor — Upload Exam
+- Log in as Instructor → Navigate to **Upload Exam**
+- Upload a question paper PDF → AI auto-generates a rubric (or paste/edit your own JSON rubric)
+- Upload student answer PDFs → Submit for grading
 
-2. **AI Pipeline (automatic)**
-   - Crops individual questions from each PDF
-   - Runs OCR on each cropped answer image
-   - Evaluates each answer against the rubric using an LLM
-   - Scans all answers for plagiarism
+### 2. AI Pipeline (runs automatically in background)
+- Crops individual questions from each student PDF using PyMuPDF
+- Runs OCR on each cropped answer image (Groq or Gemini Vision)
+- Evaluates each answer against the rubric criteria using an LLM
+- Generates per-criterion scores and justifications
+- Scans all answers for plagiarism via TF-IDF cosine similarity
 
-3. **TA — Review Grades**
-   - Log in as TA → Open "Review Dashboard"
-   - View AI-proposed grades side-by-side with the original handwritten answer
-   - Press `A` to approve or `O` to override with a custom score & justification
-   - Use `↑`/`↓` arrow keys to navigate between submissions
+### 3. TA — Review Grades
+- Log in as TA → Open **Review Dashboard**
+- View AI-proposed grades side-by-side with the original handwritten answer crop
+- Press `A` to approve or `O` to override with a custom score & justification
+- Use `↑`/`↓` arrow keys to navigate between submissions
+- Bulk approve remaining grades with one click
 
-4. **Student — View Results**
-   - Log in as student → View graded exams and detailed feedback
+### 4. Student — View Results
+- Log in as Student → View **Student Dashboard**
+- See all graded exams with total scores
+- Drill into individual exam results to see per-question grades, AI feedback, and answer crops
+- Submit regrade requests with explanatory notes
 
-5. **Instructor — Export**
-   - View the exam stats dashboard
-   - Download finalized grades as CSV
+### 5. Instructor — Export
+- View the **Exams List** with stats
+- Download finalized grades as CSV for LMS integration
 
 ---
 
 ## 📮 API Reference
 
-All endpoints are prefixed with `/api/v1`.
+All endpoints are prefixed with `/api/v1`. Full interactive docs available at `/docs` (Swagger) or `/redoc`.
 
-### Authentication
+### Authentication (`/api/v1/auth/`)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/auth/login` | — | Login → JWT token |
-| `POST` | `/auth/register` | — | Register a new user |
+| `POST` | `/auth/login` | — | Login with email + password → JWT token |
+| `POST` | `/auth/register` | — | Register a new user (defaults to TA role) |
 | `GET` | `/auth/me` | ✅ | Get current user profile |
 
-### Exams
+### Exams (`/api/v1/exams/`)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/exams` | ✅ | List all exams |
+| `GET` | `/exams` | Instructor | List all submitted exams |
 | `POST` | `/exams` | Instructor | Submit exam PDFs + rubric for grading |
-| `GET` | `/exams/{id}/dashboard` | TA+ | Load the review dashboard data |
+| `GET` | `/exams/{id}/dashboard` | TA+ | Load the TA review dashboard data |
+| `GET` | `/exams/{id}/grades` | TA+ | List all grades for an exam |
 | `GET` | `/exams/{id}/grades/export` | Instructor | Download CSV of finalized grades |
+| `GET` | `/exams/{id}/plagiarism` | TA+ | Get flagged plagiarism pairs |
 
-### Grading
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/grades/review` | TA+ | Approve or override a single grade |
-| `POST` | `/grades/review/bulk` | TA+ | Bulk approve all pending AI grades |
-
-### Rubrics
+### Rubrics (`/api/v1/rubrics/`)
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `POST` | `/rubrics/extract-text` | Instructor | Extract text from an uploaded PDF |
-| `POST` | `/rubrics/generate` | Instructor | AI-generate a rubric from extracted text |
+| `POST` | `/rubrics/extract-text` | Instructor | Extract text from a question paper PDF (digital or scanned) |
+| `POST` | `/rubrics/generate` | Instructor | AI-generate a structured rubric from extracted text |
 
-### Jobs & Plagiarism
+### Grade Review (`/api/v1/grades/`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/grades/review` | TA+ | Approve or override an individual AI grade |
+| `POST` | `/grades/review/bulk` | TA+ | Bulk approve multiple grades at once |
+
+### Student (`/api/v1/student/`)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/student/exams` | Student | List exams the student has grades for |
+| `GET` | `/student/exams/{id}` | Student | Get detailed grades for a specific exam |
+| `POST` | `/student/grades/{id}/regrade` | Student | Submit a regrade request |
+
+### Utility
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/jobs/{id}` | TA+ | Poll background job status |
-| `GET` | `/exams/{id}/plagiarism` | TA+ | Get flagged plagiarism pairs |
-
-> 📄 Full interactive docs available at `/docs` (Swagger UI) or `/redoc` when the server is running.
+| `GET` | `/students/{id}/grades` | TA+ | Get all grades for a specific student |
+| `GET` | `/health` | — | Health check |
 
 ---
 
@@ -279,55 +320,56 @@ All endpoints are prefixed with `/api/v1`.
 gradeops/
 ├── .env.example              # Template for root environment variables
 ├── .gitignore
-├── docker-compose.yml        # Full-stack orchestration
+├── docker-compose.yml        # Full-stack orchestration (Postgres + Backend + Frontend)
+├── LICENSE
 ├── README.md
 │
 ├── backend/
 │   ├── Dockerfile
-│   ├── .env.example          # Template for backend environment variables
+│   ├── .env.example          # Template for local backend environment variables
 │   ├── requirements.txt      # Python dependencies
-│   ├── main.py               # FastAPI app entry point
+│   ├── main.py               # FastAPI app entry point + lifespan + CORS
 │   ├── config.py             # Pydantic settings (reads .env)
-│   ├── database.py           # SQLAlchemy async engine + ORM models
-│   ├── auth.py               # JWT authentication + RBAC
-│   ├── api_routes.py         # REST API endpoints
-│   ├── models.py             # Pydantic request/response schemas
-│   ├── pipeline.py           # OCR → Grade → Plagiarism orchestrator
-│   ├── ocr_pipeline.py       # OCR backends (Groq / Gemini Vision)
-│   ├── grading_agent.py      # LLM grading agent
-│   ├── plagiarism_detector.py # TF-IDF cosine similarity detection
+│   ├── database.py           # SQLAlchemy async engine + UserORM + demo seeding
+│   ├── auth.py               # JWT auth + RBAC (Instructor / TA / Student)
+│   ├── api_routes.py         # All REST API endpoints
+│   ├── models.py             # Pydantic request/response schemas + enums
+│   ├── pipeline.py           # OCR → Grade → Plagiarism pipeline orchestrator
+│   ├── ocr_pipeline.py       # OCR backends (Groq Vision / Gemini Vision)
+│   ├── grading_agent.py      # LLM grading agent (LangChain)
+│   ├── plagiarism_detector.py # TF-IDF cosine similarity detector
 │   ├── background_tasks.py   # Thread-based async job queue
-│   └── storage.py            # Local filesystem / AWS S3 backends
+│   └── storage.py            # Local filesystem / AWS S3 storage backends
 │
 ├── frontend/
-│   ├── Dockerfile
-│   ├── nginx.conf            # Production Nginx config
+│   ├── Dockerfile            # Multi-stage build (Node → Nginx)
+│   ├── nginx.conf            # Production Nginx reverse proxy config
 │   ├── package.json
-│   ├── vite.config.js        # Vite config + API proxy
+│   ├── vite.config.js        # Vite config + API proxy to backend
 │   ├── index.html
 │   └── src/
-│       ├── main.jsx
-│       ├── App.jsx            # React Router setup
-│       ├── index.css          # Global styles (Tailwind v4)
+│       ├── main.jsx          # React entry point
+│       ├── App.jsx           # React Router setup (all routes)
+│       ├── index.css          # Global styles (Tailwind CSS v4)
 │       ├── api/
-│       │   └── client.js     # Axios API wrapper
+│       │   └── client.js     # Axios API wrapper with JWT interceptor
 │       ├── context/
-│       │   └── AuthContext.jsx
+│       │   └── AuthContext.jsx # Auth state management
 │       ├── components/
-│       │   ├── Layout.jsx     # Sidebar navigation
-│       │   └── ProtectedRoute.jsx
+│       │   ├── Layout.jsx     # Sidebar navigation + role-based menu
+│       │   └── ProtectedRoute.jsx  # Route guard by role
 │       └── pages/
 │           ├── Login.jsx
 │           ├── Register.jsx
 │           ├── instructor/
-│           │   ├── UploadExam.jsx
-│           │   └── ExamsList.jsx
+│           │   ├── UploadExam.jsx   # Drag-drop upload + rubric editor
+│           │   └── ExamsList.jsx    # Exam list + stats + CSV export
 │           ├── ta/
-│           │   ├── ReviewDashboard.jsx
-│           │   └── PlagiarismView.jsx
+│           │   ├── ReviewDashboard.jsx  # HITL split-screen review UI
+│           │   └── PlagiarismView.jsx   # Plagiarism flags viewer
 │           └── student/
-│               ├── StudentDashboard.jsx
-│               └── StudentExamView.jsx
+│               ├── StudentDashboard.jsx  # Student exam list
+│               └── StudentExamView.jsx   # Detailed grade view + regrade
 ```
 
 ---
